@@ -19,3 +19,6 @@
 # Ignore Nextflow temporary and config files
 **/.nextflow.*
 **/.nextflow/
+
+# Ignore local docs/results (tracked separately)
+docs/

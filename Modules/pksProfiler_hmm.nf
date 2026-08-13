@@ -1,7 +1,7 @@
 nextflow.enable.dsl = 2
 
 process pksProfiler_hmm {
-    label 'process_medium'
+    label 'pksProfilerHMM'
     scratch true
     publishDir "${params.pks_dir}", mode: 'copy'
     conda "${params.pks_hmm_env}"
@@ -55,16 +55,51 @@ process pksProfiler_hmm {
     seqtk seq -a "${sampleID}.merged.fastq.gz" > "${sampleID}.merged.fa"
 
 	ls -lh "${sampleID}.merged.fa"
-    echo "nhmmscan --cpu "${params.hmm_cpu}" --tblout "${tblout}" "${params.hmm_model}" "${sampleID}.merged.fa" > "${logfile}" 2>&1"
 
-    echo "Running nhmmscan on sample: ${sampleID}"
-    nhmmscan --cpu "${params.hmm_cpu}" \\
-        --tblout "${tblout}" \\
-        "${params.hmm_model}" \\
-        "${sampleID}.merged.fa" \\
-        > "${logfile}" 2>&1
+    # Split FASTA into chunks matching the CPU allocation; each chunk runs nhmmscan --cpu 1
+    N_CHUNKS=${task.cpus}
+    mkdir -p "${sampleID}.fa_chunks"
+    seqkit split2 -p \${N_CHUNKS} \\
+        -O "${sampleID}.fa_chunks" \\
+        "${sampleID}.merged.fa"
 
-    # Fail early with a helpful message if tblout didn't get created
+    echo "Running \${N_CHUNKS} parallel nhmmscan instances on sample: ${sampleID}"
+
+    pids=()
+    for i in \$(seq 1 \${N_CHUNKS}); do
+        i_pad=\$(printf '%03d' \$i)
+        chunk_fa="${sampleID}.fa_chunks/${sampleID}.merged.part_\${i_pad}.fa"
+        [[ -f "\${chunk_fa}" ]] || continue
+        nhmmscan --cpu 1 \\
+            --tblout "${sampleID}.chunk_\${i_pad}.tblout" \\
+            "${params.hmm_model}" \\
+            "\${chunk_fa}" \\
+            > "${sampleID}.chunk_\${i_pad}.log" 2>&1 &
+        pids+=(\$!)
+    done
+
+    failed=0
+    for pid in "\${pids[@]}"; do
+        wait "\${pid}" || { echo "ERROR: nhmmscan chunk (pid \${pid}) failed" >&2; failed=1; }
+    done
+    [[ "\${failed}" -eq 0 ]] || exit 1
+
+    # Merge tblouts: 2-line header from first chunk, data rows from all, footer from last
+    first=\$(ls "${sampleID}.chunk_"*.tblout | sort | head -1)
+    head -2 "\${first}" > "${tblout}"
+    for f in \$(ls "${sampleID}.chunk_"*.tblout | sort); do
+        grep -v '^#' "\${f}" >> "${tblout}" || true
+    done
+    grep '^#' "\$(ls "${sampleID}.chunk_"*.tblout | sort | tail -1)" | tail -n +3 >> "${tblout}"
+
+    # Merge logs
+    : > "${logfile}"
+    for f in \$(ls "${sampleID}.chunk_"*.log | sort); do
+        echo "=== \${f} ===" >> "${logfile}"
+        cat "\${f}" >> "${logfile}"
+    done
+
+    # Fail early with a helpful message if tblout is empty
     if [[ ! -s "${tblout}" ]]; then
         echo "ERROR: nhmmscan did not produce a non-empty ${tblout}. See ${logfile}." >&2
         exit 1
