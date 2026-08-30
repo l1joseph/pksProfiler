@@ -10,6 +10,7 @@ params.save_intermediates = false // publish extracted/filtered/host-depleted FA
 params.profiling_method = "bowtie2" // bowtie2 | hmm | both
 params.hmm_evalue       = 1e-10
 params.hmm_chunking = false
+params.entero_filter = true
 params.hmm_model        = "${projectDir}/ref/hmm/clb_all_dna.hmm"
 params.bracken_read_length = null // Must match a read length supported by the selected Bracken database.
 
@@ -60,7 +61,7 @@ include { mapReads } from './Modules/map_reads.nf'
 include { pksProfiler_align as pksProfilerAlign } from './Modules/pksProfiler_align.nf'
 include { pksProfiler_hmm as pksProfilerHMM } from './Modules/pksProfiler_hmm.nf'
 include { plotPKS; masterTableAlign; masterTableHMM; masterQCSummary } from './Modules/plotting.nf'
-include { extractPksIslandReads; Bracken; process_bracken as combinePKSTaxa; combineClbTaxonomySupport } from './Modules/pks_taxa.nf'
+include { filterEnterobacteriaceae; extractPksIslandReads; Bracken; process_bracken as combinePKSTaxa; combineClbTaxonomySupport } from './Modules/pks_taxa.nf'
 include { plotBrackenTaxa as plotPKSTaxa } from './Modules/plot_bracken_taxa.nf'
 
 // ---------------- Workflow ----------------
@@ -228,6 +229,23 @@ workflow {
         MAP_OUT.qc.map { _sampleID, qc_file -> qc_file }
     )
 
+	// ---------- STEP 1c: Enterobacteriaceae pre-filter ----------
+	def PROFILING_READS
+	if (params.entero_filter && params.kraken_db) {
+	    FILTER_ENTERO_OUT = filterEnterobacteriaceae(MAPPED_READS)
+	    PROFILING_READS = FILTER_ENTERO_OUT.reads
+	    QC_FRAGMENTS = QC_FRAGMENTS.mix(
+	        FILTER_ENTERO_OUT.qc.map { _sampleID, qc_file -> qc_file }
+	    )
+	} else {
+	    if (params.entero_filter && !params.kraken_db) {
+	        log.warn "[pksProfiler] entero_filter is enabled but --kraken_db not provided. " +
+	                 "Profiling will run on all host-depleted reads (~40M). " +
+	                 "Provide --kraken_db to enable the Enterobacteriaceae pre-filter."
+	    }
+	    PROFILING_READS = MAPPED_READS
+	}
+
 	// ---------- STEP 2: Profiling ----------
     def valid_methods = ["bowtie2", "hmm", "both"]
 
@@ -235,15 +253,11 @@ workflow {
         exit 1, "Unknown --profiling_method: ${params.profiling_method}. Supported: bowtie2, hmm, both"
     }
 
-    if (params.pks_taxa && params.profiling_method == "hmm") {
-        exit 1, "--pks_taxa requires alignment profiling. Use --profiling_method bowtie2 or both."
-    }
-
     def do_align = params.profiling_method in ["bowtie2", "both"]
     def do_hmm   = params.profiling_method in ["hmm", "both"]
 
     if (do_align) {
-        ALIGN_OUT = pksProfilerAlign(MAPPED_READS)
+        ALIGN_OUT = pksProfilerAlign(PROFILING_READS)
 
         ALIGN_OUT.profile
             .set { PKS_ALIGN_OUT }
@@ -253,7 +267,7 @@ workflow {
         )
     }
     if (do_hmm) {
-        HMM_OUT = pksProfilerHMM(MAPPED_READS)
+        HMM_OUT = pksProfilerHMM(PROFILING_READS)
 
         HMM_OUT.profile
             .set { PKS_HMM_OUT }
