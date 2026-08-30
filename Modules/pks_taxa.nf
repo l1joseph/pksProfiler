@@ -334,3 +334,65 @@ process combineClbTaxonomySupport {
     --species-output pks.clb_species_support.tsv
   """
 }
+
+process filterEnterobacteriaceae {
+    label 'entero_filter'
+    scratch true
+    publishDir "${params.pks_dir}", mode: 'copy'
+    conda "${params.krakenuniq_bracken_env}"
+
+    input:
+    tuple val(sampleID), path(fastq_gz)
+
+    output:
+    tuple val(sampleID), path("${sampleID}.entero.fastq.gz"), emit: reads
+    tuple val(sampleID), path("${sampleID}.entero.qc.tsv"),   emit: qc
+
+    script:
+    """
+    set -euo pipefail
+
+    REPORT="${sampleID}.krakenuniq.entero.report.txt"
+    OUTPUT="${sampleID}.krakenuniq.entero.output.txt"
+    FILTERED="${sampleID}.entero.fastq"
+    QC="${sampleID}.entero.qc.tsv"
+
+    zcat "${fastq_gz}" > "${sampleID}.all_reads.fastq"
+
+    READS_IN=\$(awk 'END { print int(NR / 4) }' "${sampleID}.all_reads.fastq")
+
+    printf "Sample\tMetric\tValue\n" > "\$QC"
+
+    if [[ "\$READS_IN" -eq 0 ]]; then
+        : | gzip -c > "${sampleID}.entero.fastq.gz"
+        printf "%s\treads_after_entero_filter\t0\n" "${sampleID}" >> "\$QC"
+        exit 0
+    fi
+
+    krakenuniq \\
+        --db "${params.kraken_db}" \\
+        --threads "${task.cpus}" \\
+        --report-file "\$REPORT" \\
+        --output "\$OUTPUT" \\
+        "${sampleID}.all_reads.fastq"
+
+    extract_kraken_reads.py \\
+        -k "\$OUTPUT" \\
+        -r "\$REPORT" \\
+        -s "${sampleID}.all_reads.fastq" \\
+        -t 543 \\
+        --include-children \\
+        -o "\$FILTERED"
+
+    if [[ ! -s "\$FILTERED" ]]; then
+        : | gzip -c > "${sampleID}.entero.fastq.gz"
+        printf "%s\treads_after_entero_filter\t0\n" "${sampleID}" >> "\$QC"
+        exit 0
+    fi
+
+    gzip -c "\$FILTERED" > "${sampleID}.entero.fastq.gz"
+
+    READS_OUT=\$(awk 'END { print int(NR / 4) }' "\$FILTERED")
+    printf "%s\treads_after_entero_filter\t%s\n" "${sampleID}" "\$READS_OUT" >> "\$QC"
+    """
+}
