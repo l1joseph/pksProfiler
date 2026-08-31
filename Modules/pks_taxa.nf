@@ -382,6 +382,7 @@ process filterEnterobacteriaceae {
     -s "${sampleID}.all_reads.fastq" \\
     -t 543 \\
     --include-children \\
+    --fastq-output \\
     -o "\$FILTERED"
 
   if [[ ! -s "\$FILTERED" ]]; then
