@@ -12,6 +12,13 @@ params.hmm_evalue       = 1e-10
 params.hmm_chunking = false
 params.entero_filter = true
 params.hmm_model        = "${projectDir}/ref/hmm/clb_all_dna.hmm"
+
+// MAG branch (metagenome mode only)
+params.enable_mags       = false
+params.gtdbtk_db         = null
+params.checkm2_db        = null
+params.clb_protein_hmm   = "${projectDir}/ref/hmm/clb_all_protein.hmm"
+params.hmm_protein_evalue = 1e-5
 params.bracken_read_length = null // Must match a read length supported by the selected Bracken database.
 
 // profile taxa that map to the pks island:
@@ -63,6 +70,7 @@ include { pksProfiler_hmm as pksProfilerHMM } from './Modules/pksProfiler_hmm.nf
 include { plotPKS; masterTableAlign; masterTableHMM; masterQCSummary } from './Modules/plotting.nf'
 include { filterEnterobacteriaceae; extractPksIslandReads; Bracken; process_bracken as combinePKSTaxa; combineClbTaxonomySupport } from './Modules/pks_taxa.nf'
 include { plotBrackenTaxa as plotPKSTaxa } from './Modules/plot_bracken_taxa.nf'
+include { pksMAG } from './Modules/pks_mag.nf'
 
 // ---------------- Workflow ----------------
 workflow {
@@ -334,6 +342,21 @@ workflow {
 		combinePKSTaxa(BRACKEN_MPA_FILES)
 		
 
+    }
+
+    // ---------- STEP 3c: MAG branch (metagenome mode + --enable_mags) ----------
+    if (params.enable_mags) {
+        if (!params.gtdbtk_db) {
+            exit 1, "--enable_mags requires --gtdbtk_db"
+        }
+        if (!params.checkm2_db) {
+            exit 1, "--enable_mags requires --checkm2_db"
+        }
+        if (!file(params.clb_protein_hmm).exists()) {
+            exit 1, "--clb_protein_hmm not found: ${params.clb_protein_hmm}\n" +
+                    "Build it first: bash scripts/build_clb_protein_hmm.sh"
+        }
+        pksMAG(MAPPED_READS)
     }
 
     // ---------- STEP 4: Master tables ----------

@@ -1,0 +1,10 @@
+name: pksprofiler-checkm2
+
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - checkm2=1.0.2
+  - diamond=2.1.8
