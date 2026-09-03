@@ -21,7 +21,7 @@ def parse_prokka_gff(gff_path):
             if line.startswith("#"):
                 continue
             parts = line.rstrip("\n").split("\t")
-            if len(parts) < 9 or parts[2] not in ("gene", "CDS"):
+            if len(parts) < 9 or parts[2] != "CDS":
                 continue
             attr = dict(re.findall(r'(\w+)=([^;]+)', parts[8]))
             genes.append({

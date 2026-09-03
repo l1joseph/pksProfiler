@@ -19,6 +19,12 @@ FIELDNAMES = [
 ]
 
 
+def is_unexpected_taxon(taxonomy):
+    """True only when taxonomy is classified but not Enterobacterales.
+    Unclassified bins are unknown, not anomalous."""
+    return taxonomy != "unclassified" and ENTEROBACTERALES not in taxonomy
+
+
 def parse_checkm2(tsv_path):
     result = {}
     with open(tsv_path) as fh:
@@ -85,7 +91,7 @@ def main():
 
         qc = checkm2.get(bin_id, {"completeness": 0.0, "contamination": 0.0, "genome_size": 0})
         taxonomy = gtdbtk.get(bin_id, "unclassified")
-        unexpected = ENTEROBACTERALES not in taxonomy
+        unexpected = is_unexpected_taxon(taxonomy)
 
         context_path = os.path.join(args.context_dir, f"{bin_id}.context.tsv")
         if os.path.exists(context_path):

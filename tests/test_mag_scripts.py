@@ -36,6 +36,15 @@ contig1\tProdigal\tCDS\t100000\t101000\t.\t-\t.\tID=PROKKA_00003;gene=tnpA;produ
 contig2\tProdigal\tCDS\t500\t1500\t.\t+\t.\tID=PROKKA_00004;gene=gyrB;product=gyrase subunit B
 """
 
+GFF_WITH_GENE_FEATURES = """\
+##gff-version 3
+##sequence-region contig1 1 200000
+contig1\tProkka\tgene\t1000\t2000\t.\t+\t.\tID=gene_1
+contig1\tProkka\tCDS\t1000\t2000\t.\t+\t.\tID=PROKKA_00001;gene=intA;product=integrase
+contig1\tProkka\tgene\t3000\t4000\t.\t+\t.\tID=gene_2
+contig1\tProkka\tCDS\t3000\t4000\t.\t+\t.\tID=PROKKA_00002;gene=clbA;product=colibactin A
+"""
+
 TBLOUT_CONTENT = """\
 #                                                               --- full sequence --- -------------- this domain -------------   hmm coord   ali coord   env coord
 # target name        accession  query name           accession    E-value  score  bias   E-value  score  bias  exp  dom  seq  from    to  from    to  from    to  acc description of target
@@ -59,6 +68,19 @@ class TestExtractGenomicContext(unittest.TestCase):
             gff = self._write(tmp, "test.gff", GFF_CONTENT)
             genes = self.mod.parse_prokka_gff(gff)
         self.assertEqual(len(genes), 4)
+
+    def test_parse_prokka_gff_excludes_gene_records(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            gff = self._write(tmp, "test.gff", GFF_WITH_GENE_FEATURES)
+            genes = self.mod.parse_prokka_gff(gff)
+        self.assertEqual(len(genes), 2)
+
+    def test_parse_prokka_gff_gene_names_from_cds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            gff = self._write(tmp, "test.gff", GFF_WITH_GENE_FEATURES)
+            genes = self.mod.parse_prokka_gff(gff)
+        self.assertEqual(genes[0]["locus_tag"], "PROKKA_00001")
+        self.assertEqual(genes[0]["gene"], "intA")
 
     def test_parse_hmmsearch_tblout(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -162,6 +184,21 @@ class TestBuildMagSummary(unittest.TestCase):
             result = self.mod.parse_gtdbtk(gtdbtk)
         self.assertFalse(self.mod.ENTEROBACTERALES not in result["bin_001"])
         self.assertTrue(self.mod.ENTEROBACTERALES not in result["bin_002"])
+
+    def test_is_unexpected_taxon_unclassified(self):
+        self.assertFalse(self.mod.is_unexpected_taxon("unclassified"))
+
+    def test_is_unexpected_taxon_classified_other_order(self):
+        self.assertTrue(self.mod.is_unexpected_taxon(
+            "d__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;"
+            "f__Lactobacillaceae;g__Lactobacillus;s__Lactobacillus acidophilus"
+        ))
+
+    def test_is_unexpected_taxon_enterobacterales(self):
+        self.assertFalse(self.mod.is_unexpected_taxon(
+            "d__Bacteria;p__Proteobacteria;c__Gammaproteobacteria;"
+            "o__Enterobacterales;f__Enterobacteriaceae;g__Escherichia;s__Escherichia coli"
+        ))
 
     def test_end_to_end_summary(self):
         with tempfile.TemporaryDirectory() as tmp:
