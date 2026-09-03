@@ -7,7 +7,7 @@ process megahitAssemble {
     scratch true
     publishDir { "${params.outdir}/pks_summary/mag/${sampleID}/assembly" },
         mode: 'copy', enabled: params.save_intermediates
-    conda "${projectDir}/conda_envs/megahit_env.yml"
+    conda "${params.mag_assembly_env}"
 
     input:
     tuple val(sampleID), path(reads)
@@ -32,7 +32,7 @@ process megahitAssemble {
 process alignToContigs {
     label 'mag_binning'
     scratch true
-    conda "${projectDir}/conda_envs/minimap2_env.yml"
+    conda "${params.mag_binning_env}"
 
     input:
     tuple val(sampleID), path(reads), path(contigs)
@@ -58,7 +58,7 @@ process alignToContigs {
 process jgiContigDepths {
     label 'mag_binning'
     scratch true
-    conda "${projectDir}/conda_envs/metabat2_env.yml"
+    conda "${params.mag_binning_env}"
 
     input:
     tuple val(sampleID), path(bam), path(bai)
@@ -80,7 +80,7 @@ process metabat2Bin {
     scratch true
     publishDir { "${params.outdir}/pks_summary/mag/${sampleID}/bins" },
         mode: 'copy', enabled: params.save_intermediates
-    conda "${projectDir}/conda_envs/metabat2_env.yml"
+    conda "${params.mag_binning_env}"
 
     input:
     tuple val(sampleID), path(contigs), path(depth)
@@ -113,7 +113,7 @@ process checkm2Predict {
     label 'mag_binning'
     scratch true
     publishDir { "${params.outdir}/pks_summary/mag/${sampleID}/checkm2" }, mode: 'copy'
-    conda "${projectDir}/conda_envs/checkm2_env.yml"
+    conda "${params.mag_binning_env}"
 
     input:
     tuple val(sampleID), path(bins)
@@ -139,7 +139,7 @@ process gtdbtkClassify {
     label 'mag_gtdbtk'
     scratch true
     publishDir { "${params.outdir}/pks_summary/mag/${sampleID}/gtdbtk" }, mode: 'copy'
-    conda "${projectDir}/conda_envs/gtdbtk_env.yml"
+    conda "${params.mag_gtdbtk_env}"
 
     input:
     tuple val(sampleID), path(bins)
@@ -171,7 +171,7 @@ process prokkaAnnotate {
     scratch true
     publishDir { "${params.outdir}/pks_summary/mag/${sampleID}" }, mode: 'copy',
         saveAs: { fn -> fn.tokenize('/').last() }
-    conda "${projectDir}/conda_envs/prokka_env.yml"
+    conda "${params.mag_annotation_env}"
 
     input:
     tuple val(sampleID), val(binID), path(bin_fa)
