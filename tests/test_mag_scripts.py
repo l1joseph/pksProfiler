@@ -49,7 +49,7 @@ TBLOUT_CONTENT = """\
 #                                                               --- full sequence --- -------------- this domain -------------   hmm coord   ali coord   env coord
 # target name        accession  query name           accession    E-value  score  bias   E-value  score  bias  exp  dom  seq  from    to  from    to  from    to  acc description of target
 #------------------- ---------- -------------------- ---------- --------- ------ ----- --------- ------ ----- ---- ---- ---- ----- ----- ----- ----- ----- ----- ---- ---------------------
-contig1_2            -          clbA                 -            1.2e-10  35.0   0.0   1.5e-10   34.8   0.0   1.0    1    1     1   200    10   205    8   207  0.95 colibactin A
+PROKKA_00002         -          clbA                 -            1.2e-10  35.0   0.0   1.5e-10   34.8   0.0   1.0    1    1     1   200    10   205    8   207  0.95 colibactin A
 """
 
 
@@ -88,7 +88,6 @@ class TestExtractGenomicContext(unittest.TestCase):
             hits = self.mod.parse_hmmsearch_tblout(tbl, evalue_threshold=1e-5)
         self.assertEqual(len(hits), 1)
         self.assertEqual(hits[0]["clb_gene"], "clbA")
-        self.assertEqual(hits[0]["contig"], "contig1")
 
     def test_is_integrase(self):
         self.assertTrue(self.mod.is_integrase({"gene": "intA", "product": "integrase"}))
@@ -121,7 +120,7 @@ class TestExtractGenomicContext(unittest.TestCase):
             rows = list(csv.DictReader(open(out), delimiter="\t"))
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["clb_gene"], "clbA")
-        # integrase (PROKKA_00001) is within 50kb of contig1_2
+        # integrase (PROKKA_00001) is within 50kb of PROKKA_00002 on contig1
         self.assertEqual(rows[0]["has_integrase"], "True")
         self.assertEqual(rows[0]["has_transposase"], "False")
 

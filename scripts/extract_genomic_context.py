@@ -76,7 +76,8 @@ def main():
     for hit in hits:
         anchor = tag_to_gene.get(hit["locus_tag"])
         mid = (anchor["start"] + anchor["end"]) // 2 if anchor else 0
-        flanking = get_flanking(genes, hit["contig"], mid, args.window)
+        contig = anchor["contig"] if anchor else ""
+        flanking = get_flanking(genes, contig, mid, args.window)
         has_int = any(is_integrase(g) for g in flanking)
         has_tra = any(is_transposase(g) for g in flanking)
         flank_names = ";".join(
@@ -88,7 +89,7 @@ def main():
             "locus_tag": hit["locus_tag"],
             "clb_gene": hit["clb_gene"],
             "evalue": hit["evalue"],
-            "contig": hit["contig"],
+            "contig": contig,
             "has_integrase": has_int,
             "has_transposase": has_tra,
             "flanking_genes": flank_names,

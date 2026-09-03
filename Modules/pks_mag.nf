@@ -97,7 +97,12 @@ process metabat2Bin {
     mkdir -p bins
     metabat2 -i ${contigs} -a ${depth} -o bins/bin -t ${task.cpus} || {
         rc=\$?
-        echo "MetaBAT2 exited \${rc} (treating as zero-bin result; expected for low-coverage assemblies)" >&2
+        if [[ \${rc} -eq 1 ]]; then
+            echo "MetaBAT2 exited 1 (no bins produced; expected for low-coverage assemblies)" >&2
+        else
+            echo "MetaBAT2 failed with exit code \${rc}" >&2
+            exit \${rc}
+        fi
     }
     """
 }
