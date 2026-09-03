@@ -319,11 +319,9 @@ workflow pksMAG {
         .map { sampleID, binID, tblout, hit_count -> tuple(sampleID, binID, tblout) }
 
     // 10. Genomic context (prokka GFF + tblout joined per pks+ bin; locus_tags now match)
-    gff_tblout_ch = prokkaAnnotate.out.gff
-        .join(pks_pos_tblout_ch, by: [0, 1])
-    extractGenomicContext(gff_tblout_ch)
+    extractGenomicContext(prokkaAnnotate.out.gff.join(pks_pos_tblout_ch, by: [0, 1]))
 
-    // 12. Aggregate per sample and build summary
+    // 11. Aggregate per sample and build summary
     tblouts_per_sample_ch = hmmsearchClb.out.tblout
         .map { sampleID, binID, tblout -> tuple(sampleID, tblout) }
         .groupTuple(by: 0)
