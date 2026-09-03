@@ -182,8 +182,8 @@ class TestBuildMagSummary(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             gtdbtk = self._write(tmp, "gtdbtk.tsv", GTDBTK_CONTENT)
             result = self.mod.parse_gtdbtk(gtdbtk)
-        self.assertFalse(self.mod.ENTEROBACTERALES not in result["bin_001"])
-        self.assertTrue(self.mod.ENTEROBACTERALES not in result["bin_002"])
+        self.assertFalse(self.mod.is_unexpected_taxon(result["bin_001"]))
+        self.assertTrue(self.mod.is_unexpected_taxon(result["bin_002"]))
 
     def test_is_unexpected_taxon_unclassified(self):
         self.assertFalse(self.mod.is_unexpected_taxon("unclassified"))
@@ -199,6 +199,9 @@ class TestBuildMagSummary(unittest.TestCase):
             "d__Bacteria;p__Proteobacteria;c__Gammaproteobacteria;"
             "o__Enterobacterales;f__Enterobacteriaceae;g__Escherichia;s__Escherichia coli"
         ))
+
+    def test_is_unexpected_taxon_empty_string(self):
+        self.assertFalse(self.mod.is_unexpected_taxon(""))
 
     def test_end_to_end_summary(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -22,7 +22,7 @@ FIELDNAMES = [
 def is_unexpected_taxon(taxonomy):
     """True only when taxonomy is classified but not Enterobacterales.
     Unclassified bins are unknown, not anomalous."""
-    return taxonomy != "unclassified" and ENTEROBACTERALES not in taxonomy
+    return taxonomy not in ("unclassified", "") and ENTEROBACTERALES not in taxonomy
 
 
 def parse_checkm2(tsv_path):
@@ -43,7 +43,7 @@ def parse_gtdbtk(summary_path):
     with open(summary_path) as fh:
         reader = csv.DictReader(fh, delimiter="\t")
         for row in reader:
-            result[row["user_genome"]] = row.get("classification", "unclassified")
+            result[row["user_genome"]] = row.get("classification", "unclassified") or "unclassified"
     return result
 
 
