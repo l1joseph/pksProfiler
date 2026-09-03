@@ -95,9 +95,10 @@ process metabat2Bin {
     """
     set -euo pipefail
     mkdir -p bins
-    # MetaBAT2 exits non-zero on legitimate low-coverage assemblies; let it run
-    # and fall through — the optional output handles the zero-bin case cleanly.
-    metabat2 -i ${contigs} -a ${depth} -o bins/bin -t ${task.cpus} --unbinned || true
+    metabat2 -i ${contigs} -a ${depth} -o bins/bin -t ${task.cpus} || {
+        rc=\$?
+        echo "MetaBAT2 exited \${rc} (treating as zero-bin result; expected for low-coverage assemblies)" >&2
+    }
     """
 }
 
