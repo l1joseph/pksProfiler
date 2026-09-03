@@ -86,18 +86,18 @@ process metabat2Bin {
     tuple val(sampleID), path(contigs), path(depth)
 
     output:
-    tuple val(sampleID), path("bins/bin.*.fa"), emit: bins
+    // optional: true — samples with too few contigs for binning emit nothing and
+    // are silently dropped from the MAG branch rather than passed through as a
+    // fake pseudo-bin.
+    tuple val(sampleID), path("bins/bin.*.fa"), emit: bins, optional: true
 
     script:
     """
     set -euo pipefail
     mkdir -p bins
+    # MetaBAT2 exits non-zero on legitimate low-coverage assemblies; let it run
+    # and fall through — the optional output handles the zero-bin case cleanly.
     metabat2 -i ${contigs} -a ${depth} -o bins/bin -t ${task.cpus} --unbinned || true
-    # Ensure at least one bin exists; if metabat2 produced nothing, treat all
-    # contigs as a single "bin.0.fa" so downstream processes have input.
-    if ! ls bins/bin.*.fa 2>/dev/null | grep -q .; then
-        cp ${contigs} bins/bin.0.fa
-    fi
     """
 }
 
@@ -119,7 +119,7 @@ process checkm2Predict {
     """
     set -euo pipefail
     mkdir -p bin_input
-    for b in ${bins}; do cp \$b bin_input/; done
+    for b in ${bins}; do ln -s \$(realpath \$b) bin_input/; done
     checkm2 predict --threads ${task.cpus} \
         --input bin_input \
         --output-directory checkm2_out \
@@ -145,7 +145,7 @@ process gtdbtkClassify {
     """
     set -euo pipefail
     mkdir -p bin_input gtdbtk_out
-    for b in ${bins}; do cp \$b bin_input/; done
+    for b in ${bins}; do ln -s \$(realpath \$b) bin_input/; done
     GTDBTK_DATA_PATH=${params.gtdbtk_db} gtdbtk classify_wf \
         --genome_dir bin_input \
         --out_dir gtdbtk_out \
@@ -185,7 +185,7 @@ process prodigalPredict {
 process hmmsearchClb {
     label 'mag_hmm'
     scratch true
-    conda "${projectDir}/conda_envs/pks_hmm_env.yml"
+    conda "${params.pks_hmm_env}"
 
     input:
     tuple val(sampleID), val(binID), path(proteins)
@@ -235,7 +235,7 @@ process extractGenomicContext {
     scratch true
     publishDir { "${params.outdir}/pks_summary/mag/${sampleID}" }, mode: 'copy',
         saveAs: { "${binID}.context.tsv" }
-    conda "${projectDir}/conda_envs/pks_hmm_env.yml"
+    conda "${params.pks_hmm_env}"
 
     input:
     tuple val(sampleID), val(binID), path(gff), path(tblout)
@@ -258,8 +258,8 @@ process extractGenomicContext {
 
 process magSummaryTable {
     label 'mag_hmm'
-    publishDir "${params.outdir}/pks_summary/mag", mode: 'copy'
-    conda "${projectDir}/conda_envs/pks_hmm_env.yml"
+    publishDir "${params.pks_mag_dir}", mode: 'copy'
+    conda "${params.pks_hmm_env}"
 
     input:
     tuple val(sampleID), path(checkm2_report), path(gtdbtk_summary),
@@ -272,8 +272,8 @@ process magSummaryTable {
     """
     set -euo pipefail
     mkdir -p tblout_dir context_dir
-    for f in ${tblouts}; do cp \$f tblout_dir/; done
-    for f in ${contexts}; do cp \$f context_dir/; done
+    for f in ${tblouts}; do ln -s \$(realpath \$f) tblout_dir/; done
+    for f in ${contexts}; do ln -s \$(realpath \$f) context_dir/; done
     python ${projectDir}/scripts/build_mag_summary.py \
         --checkm2 ${checkm2_report} \
         --gtdbtk ${gtdbtk_summary} \
@@ -337,7 +337,7 @@ workflow pksMAG {
     // 10. Prokka annotation (pks+ bins only)
     pks_pos_fa_ch = pks_pos_tblout_ch
         .map { sampleID, binID, tblout -> tuple(sampleID, binID) }
-        .join(bins_flat_ch.map { sampleID, binID, fa -> tuple(sampleID, binID, fa) }, by: [0, 1])
+        .join(bins_flat_ch, by: [0, 1])
     prokkaAnnotate(pks_pos_fa_ch)
 
     // 11. Genomic context (gff + tblout joined per bin)

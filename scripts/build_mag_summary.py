@@ -8,6 +8,8 @@ import os
 import sys
 from pathlib import Path
 
+from mag_utils import parse_hmmsearch_tblout
+
 ENTEROBACTERALES = "o__Enterobacterales"
 
 FIELDNAMES = [
@@ -39,36 +41,13 @@ def parse_gtdbtk(summary_path):
     return result
 
 
-def parse_hmmsearch_tblout(tblout_path, evalue_threshold=1e-5):
-    hits = []
-    seen = set()
-    with open(tblout_path) as fh:
-        for line in fh:
-            if line.startswith("#"):
-                continue
-            parts = line.split()
-            if len(parts) < 19:
-                continue
-            evalue = float(parts[4])
-            if evalue > evalue_threshold:
-                continue
-            clb_gene = parts[2]
-            key = (parts[0], clb_gene)
-            if key not in seen:
-                seen.add(key)
-                hits.append({"clb_gene": clb_gene, "evalue": evalue})
-    return hits
-
-
 def parse_context(context_path):
     has_int, has_tra, flank_set = False, False, set()
     with open(context_path) as fh:
         reader = csv.DictReader(fh, delimiter="\t")
         for row in reader:
-            if row["has_integrase"].lower() == "true":
-                has_int = True
-            if row["has_transposase"].lower() == "true":
-                has_tra = True
+            has_int |= row["has_integrase"].lower() == "true"
+            has_tra |= row["has_transposase"].lower() == "true"
             if row.get("flanking_genes"):
                 for g in row["flanking_genes"].split(";"):
                     if g.strip():
@@ -100,8 +79,7 @@ def main():
         clb_genes_seen = {}
         for h in hits:
             gene = h["clb_gene"]
-            if gene not in clb_genes_seen or h["evalue"] < clb_genes_seen[gene]:
-                clb_genes_seen[gene] = h["evalue"]
+            clb_genes_seen[gene] = min(h["evalue"], clb_genes_seen.get(gene, float("inf")))
         clb_genes = sorted(clb_genes_seen.keys())
         best_evalue = min(clb_genes_seen.values())
 

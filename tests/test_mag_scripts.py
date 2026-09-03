@@ -4,11 +4,15 @@
 import csv
 import importlib.util
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
+SCRIPTS = str(REPO / "scripts")
+if SCRIPTS not in sys.path:
+    sys.path.insert(0, SCRIPTS)
 
 
 def load_script(name):

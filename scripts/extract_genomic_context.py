@@ -6,6 +6,11 @@ import csv
 import re
 import sys
 
+from mag_utils import parse_hmmsearch_tblout
+
+_INTEGRASE_KW  = {"integrase", "recombinase", "resolvase"}
+_TRANSPOSASE_KW = {"transposase", "insertion element", "is element"}
+
 
 def parse_prokka_gff(gff_path):
     genes = []
@@ -31,48 +36,26 @@ def parse_prokka_gff(gff_path):
     return genes
 
 
-def parse_hmmsearch_tblout(tblout_path, evalue_threshold=1e-5):
-    hits = []
-    with open(tblout_path) as fh:
-        for line in fh:
-            if line.startswith("#"):
-                continue
-            parts = line.split()
-            if len(parts) < 19:
-                continue
-            evalue = float(parts[4])
-            if evalue > evalue_threshold:
-                continue
-            target = parts[0]
-            query = parts[2]
-            contig = "_".join(target.split("_")[:-1])
-            hits.append({
-                "locus_tag": target,
-                "clb_gene": query,
-                "evalue": evalue,
-                "contig": contig,
-            })
-    return hits
-
-
 def get_flanking(genes, contig, pos, window=50000):
     return [
         g for g in genes
         if g["contig"] == contig
-        and not (g["end"] < pos - window or g["start"] > pos + window)
+        and g["start"] <= pos + window
+        and g["end"] >= pos - window
     ]
 
 
-def is_integrase(gene):
-    keywords = {"integrase", "recombinase", "resolvase"}
+def _has_keyword(gene, keywords):
     text = (gene["gene"] + " " + gene["product"]).lower()
     return any(kw in text for kw in keywords)
+
+
+def is_integrase(gene):
+    return _has_keyword(gene, _INTEGRASE_KW)
 
 
 def is_transposase(gene):
-    keywords = {"transposase", "insertion element", "is element"}
-    text = (gene["gene"] + " " + gene["product"]).lower()
-    return any(kw in text for kw in keywords)
+    return _has_keyword(gene, _TRANSPOSASE_KW)
 
 
 def main():

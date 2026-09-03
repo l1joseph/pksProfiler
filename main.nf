@@ -38,6 +38,7 @@ params.pks_coverage_plots_dir = "${params.pks_summary_dir}/coverage_plots"
 params.pks_taxonomy_dir = "${params.pks_summary_dir}/taxonomy"
 params.pks_taxonomy_plots_dir = "${params.pks_taxonomy_dir}/plots"
 params.pks_qc_dir = "${params.pks_summary_dir}/qc"
+params.pks_mag_dir = "${params.pks_summary_dir}/mag"
 
 // Databases and refs [CHANGE THIS]
 params.hg38_db      = null
@@ -112,6 +113,19 @@ workflow {
 
     if (hmm_evalue_text.toDouble() <= 0) {
         exit 1, "--hmm_evalue must be greater than zero"
+    }
+
+    if (params.enable_mags) {
+        if (!params.gtdbtk_db) {
+            exit 1, "--enable_mags requires --gtdbtk_db"
+        }
+        if (!params.checkm2_db) {
+            exit 1, "--enable_mags requires --checkm2_db"
+        }
+        if (!file(params.clb_protein_hmm).exists()) {
+            exit 1, "--clb_protein_hmm not found: ${params.clb_protein_hmm}\n" +
+                    "Build it first: bash scripts/build_clb_protein_hmm.sh"
+        }
     }
 
     // ---------- STEP 1: Inputs + filtering ----------
@@ -346,16 +360,6 @@ workflow {
 
     // ---------- STEP 3c: MAG branch (metagenome mode + --enable_mags) ----------
     if (params.enable_mags) {
-        if (!params.gtdbtk_db) {
-            exit 1, "--enable_mags requires --gtdbtk_db"
-        }
-        if (!params.checkm2_db) {
-            exit 1, "--enable_mags requires --checkm2_db"
-        }
-        if (!file(params.clb_protein_hmm).exists()) {
-            exit 1, "--clb_protein_hmm not found: ${params.clb_protein_hmm}\n" +
-                    "Build it first: bash scripts/build_clb_protein_hmm.sh"
-        }
         pksMAG(MAPPED_READS)
     }
 
