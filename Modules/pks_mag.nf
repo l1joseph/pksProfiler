@@ -159,29 +159,32 @@ process gtdbtkClassify {
     """
 }
 
-// ─── Prodigal gene prediction (per bin) ───────────────────────────────────────
+// ─── Prokka annotation (ALL bins — must run before hmmsearch so locus_tags match) ──
 
-process prodigalPredict {
+process prokkaAnnotate {
     label 'mag_hmm'
     scratch true
     publishDir { "${params.outdir}/pks_summary/mag/${sampleID}" }, mode: 'copy',
-        saveAs: { "${binID}.faa" }
-    conda "${projectDir}/conda_envs/prodigal_env.yml"
+        saveAs: { fn -> fn.tokenize('/').last() }
+    conda "${projectDir}/conda_envs/prokka_env.yml"
 
     input:
     tuple val(sampleID), val(binID), path(bin_fa)
 
     output:
-    tuple val(sampleID), val(binID), path("${binID}.faa"), emit: proteins
+    tuple val(sampleID), val(binID), path("prokka_out/${binID}.gff"), emit: gff
+    tuple val(sampleID), val(binID), path("prokka_out/${binID}.faa"), emit: faa_for_hmm
 
     script:
     """
     set -euo pipefail
-    prodigal -i ${bin_fa} -a ${binID}.faa -p meta -f gff -q
+    prokka --outdir prokka_out --prefix ${binID} \
+        --metagenome --cpus ${task.cpus} --force --quiet \
+        ${bin_fa}
     """
 }
 
-// ─── hmmsearch vs colibactin protein HMM (per bin) ────────────────────────────
+// ─── hmmsearch vs colibactin protein HMM (per bin, on Prokka proteins) ──────────
 
 process hmmsearchClb {
     label 'mag_hmm'
@@ -193,6 +196,7 @@ process hmmsearchClb {
 
     output:
     tuple val(sampleID), val(binID), path("${binID}.tblout"), emit: tblout
+    tuple val(sampleID), val(binID), path("${binID}.hit_count.txt"), emit: hit_count
 
     script:
     """
@@ -202,30 +206,7 @@ process hmmsearchClb {
         -E ${params.hmm_protein_evalue} \
         ${params.clb_protein_hmm} \
         ${proteins}
-    """
-}
-
-// ─── Prokka annotation (pks+ bins only) ───────────────────────────────────────
-
-process prokkaAnnotate {
-    label 'mag_hmm'
-    scratch true
-    publishDir { "${params.outdir}/pks_summary/mag/${sampleID}" }, mode: 'copy',
-        saveAs: { "${binID}.gff" }
-    conda "${projectDir}/conda_envs/prokka_env.yml"
-
-    input:
-    tuple val(sampleID), val(binID), path(bin_fa)
-
-    output:
-    tuple val(sampleID), val(binID), path("prokka_out/${binID}.gff"), emit: gff
-
-    script:
-    """
-    set -euo pipefail
-    prokka --outdir prokka_out --prefix ${binID} \
-        --metagenome --cpus ${task.cpus} --force --quiet \
-        ${bin_fa}
+    grep -vc '^#' ${binID}.tblout > ${binID}.hit_count.txt 2>/dev/null || echo 0 > ${binID}.hit_count.txt
     """
 }
 
@@ -323,25 +304,21 @@ workflow pksMAG {
     // 6. GTDB-Tk taxonomy (all bins together per sample)
     gtdbtkClassify(metabat2Bin.out.bins)
 
-    // 7. Prodigal gene prediction (per bin)
-    prodigalPredict(bins_flat_ch)
+    // 7. Prokka annotation (ALL bins — before hmmsearch so locus_tags are consistent)
+    prokkaAnnotate(bins_flat_ch)
 
-    // 8. hmmsearch vs clb protein HMM (per bin)
-    hmmsearchClb(prodigalPredict.out.proteins)
+    // 8. hmmsearch vs clb protein HMM (per bin, on prokka proteins)
+    hmmsearchClb(prokkaAnnotate.out.faa_for_hmm)
 
-    // 9. Filter to pks+ bins (≥1 passing hit in tblout)
+    // 9. Filter to pks+ bins using hit_count (avoids reading tblouts in the driver JVM)
     pks_pos_tblout_ch = hmmsearchClb.out.tblout
-        .filter { sampleID, binID, tblout ->
-            tblout.readLines().any { line -> !line.startsWith('#') && !line.trim().isEmpty() }
+        .join(hmmsearchClb.out.hit_count, by: [0, 1])
+        .filter { sampleID, binID, tblout, hit_count ->
+            hit_count.text.trim() as Integer > 0
         }
+        .map { sampleID, binID, tblout, hit_count -> tuple(sampleID, binID, tblout) }
 
-    // 10. Prokka annotation (pks+ bins only)
-    pks_pos_fa_ch = pks_pos_tblout_ch
-        .map { sampleID, binID, tblout -> tuple(sampleID, binID) }
-        .join(bins_flat_ch, by: [0, 1])
-    prokkaAnnotate(pks_pos_fa_ch)
-
-    // 11. Genomic context (gff + tblout joined per bin)
+    // 10. Genomic context (prokka GFF + tblout joined per pks+ bin; locus_tags now match)
     gff_tblout_ch = prokkaAnnotate.out.gff
         .join(pks_pos_tblout_ch, by: [0, 1])
     extractGenomicContext(gff_tblout_ch)
