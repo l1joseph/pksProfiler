@@ -332,10 +332,15 @@ workflow pksMAG {
         .map { sampleID, binID, ctx -> tuple(sampleID, ctx) }
         .groupTuple(by: 0)
 
+    // remainder: true keeps all samples even when contexts_per_sample_ch has no
+    // entry (i.e. zero pks+ bins); null → [] so the script receives an empty file list.
     summary_input_ch = checkm2Predict.out.report
         .join(gtdbtkClassify.out.summary, by: 0)
         .join(tblouts_per_sample_ch, by: 0)
-        .join(contexts_per_sample_ch, by: 0)
+        .join(contexts_per_sample_ch, by: 0, remainder: true)
+        .map { sampleID, checkm2, gtdbtk, tblouts, contexts ->
+            tuple(sampleID, checkm2, gtdbtk, tblouts, contexts ?: [])
+        }
 
     magSummaryTable(summary_input_ch)
 }
