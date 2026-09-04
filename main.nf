@@ -22,6 +22,7 @@ params.hmm_protein_evalue = 1e-5
 
 // MAG conda environments (override in a profile for pre-built envs)
 params.mag_assembly_env   = "${projectDir}/conda_envs/megahit_env.yml"
+params.mag_align_env      = "${projectDir}/conda_envs/minimap2_env.yml"
 params.mag_binning_env    = "${projectDir}/conda_envs/metabat2_env.yml"
 params.mag_gtdbtk_env     = "${projectDir}/conda_envs/gtdbtk_env.yml"
 params.mag_annotation_env = "${projectDir}/conda_envs/prokka_env.yml"

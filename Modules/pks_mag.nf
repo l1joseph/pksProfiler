@@ -32,7 +32,7 @@ process megahitAssemble {
 process alignToContigs {
     label 'mag_binning'
     scratch true
-    conda "${params.mag_binning_env}"
+    conda "${params.mag_align_env}"
 
     input:
     tuple val(sampleID), path(reads), path(contigs)
@@ -129,6 +129,7 @@ process checkm2Predict {
     checkm2 predict --threads ${task.cpus} \
         --input bin_input \
         --output-directory checkm2_out \
+        --extension fa \
         --database_path ${params.checkm2_db}
     """
 }
@@ -156,8 +157,7 @@ process gtdbtkClassify {
         --genome_dir bin_input \
         --out_dir gtdbtk_out \
         --cpus ${task.cpus} \
-        --extension fa \
-        --skip_ani_screen
+        --extension fa
     # Stub if no bacterial bins (only archaea)
     [[ -f gtdbtk_out/gtdbtk.bac120.summary.tsv ]] || \
         printf "user_genome\tclassification\n" > gtdbtk_out/gtdbtk.bac120.summary.tsv
@@ -259,8 +259,8 @@ process magSummaryTable {
     """
     set -euo pipefail
     mkdir -p tblout_dir context_dir
-    for f in ${tblouts}; do ln -s \$(realpath \$f) tblout_dir/; done
-    for f in ${contexts}; do ln -s \$(realpath \$f) context_dir/; done
+    for f in ${tblouts}; do cp \$f tblout_dir/; done
+    for f in ${contexts}; do cp \$f context_dir/; done
     python ${projectDir}/scripts/build_mag_summary.py \
         --checkm2 ${checkm2_report} \
         --gtdbtk ${gtdbtk_summary} \
